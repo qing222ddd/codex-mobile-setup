@@ -9,17 +9,26 @@
 # ============================================================
 set -e
 
+TOTAL=6
 echo "=========================================="
 echo "         手机版 Codex 安装程序"
+echo "         （共 $TOTAL 步，每步都会显示进度）"
 echo "=========================================="
 echo
 
-echo "[1/5] 安装依赖（Node、curl、tar）..."
-pkg update -y >/dev/null 2>&1 || true
-pkg install -y nodejs-lts curl tar >/dev/null 2>&1 || pkg install -y nodejs curl tar >/dev/null
-echo "      完成"
+echo "[1/$TOTAL] 更新软件源索引"
+echo "      这一步可能要等十几秒到一分钟，属正常"
+pkg update -y || true
+echo "      ✓ 完成"
+echo
 
-echo "[2/5] 下载 Codex（按手机架构自动选版本）..."
+echo "[2/$TOTAL] 安装依赖：Node、curl、tar"
+echo "      ↓ 这一步要下载几十 MB，下面的进度条是在正常干活，别关掉就行"
+pkg install -y nodejs-lts curl tar || pkg install -y nodejs curl tar
+echo "      ✓ 依赖装好了"
+echo
+
+echo "[3/$TOTAL] 下载 Codex（按手机架构自动选版本）"
 cd "$HOME"
 ARCH="$(uname -m)"
 if [ "$ARCH" = "aarch64" ]; then
@@ -28,6 +37,7 @@ else
   TARGET="x86_64-unknown-linux-musl"
 fi
 echo "      手机架构: $ARCH  ->  下载: $TARGET"
+echo "      ↓ 这个包约 80MB，进度条在下面"
 URL="https://github.com/openai/codex/releases/latest/download/codex-${TARGET}.tar.gz"
 rm -rf "$HOME/codex-dl"
 mkdir -p "$HOME/codex-dl"
@@ -35,6 +45,7 @@ if ! curl -L --fail --progress-bar -o "$HOME/codex-dl/pkg.tar.gz" "$URL"; then
   echo "      !! 下载失败。请检查网络（国内可能需要加速），然后重跑本脚本。"
   exit 1
 fi
+echo "      正在解压..."
 tar xzf "$HOME/codex-dl/pkg.tar.gz" -C "$HOME/codex-dl"
 BIN="$(find "$HOME/codex-dl" -type f -name 'codex' | head -n 1)"
 if [ -z "$BIN" ]; then
@@ -51,9 +62,10 @@ mkdir -p "$PREFIX/bin"
 cp -f "$BIN" "$PREFIX/bin/codex"
 chmod +x "$PREFIX/bin/codex"
 rm -rf "$HOME/codex-dl"
-echo "      完成，codex 已安装到 $PREFIX/bin/codex"
+echo "      ✓ codex 已安装到 $PREFIX/bin/codex"
+echo
 
-echo "[3/5] 安装接口桥接..."
+echo "[4/$TOTAL] 安装接口桥接"
 mkdir -p "$HOME/codex-bridge"
 cat > "$HOME/codex-bridge/bridge.mjs" <<'BRIDGE_EOF'
 // Codex <-> DeepSeek 桥接
@@ -335,9 +347,10 @@ server.listen(PORT, "127.0.0.1", () => {
   console.log("上游: " + UPSTREAM + "   密钥: " + (API_KEY ? "已设置" : "缺失"));
 });
 BRIDGE_EOF
-echo "      完成"
+echo "      ✓ 桥接装好了"
+echo
 
-echo "[4/5] 写 Codex 配置..."
+echo "[5/$TOTAL] 写 Codex 配置"
 mkdir -p "$HOME/.codex"
 cat > "$HOME/.codex/config.toml" <<'CFG_EOF'
 model = "deepseek-flash"
@@ -349,9 +362,10 @@ base_url = "http://127.0.0.1:8899/v1"
 wire_api = "responses"
 env_key = "OPENAI_API_KEY"
 CFG_EOF
-echo "      完成"
+echo "      ✓ 配置写好了"
+echo
 
-echo "[5/5] 创建快捷启动命令..."
+echo "[6/$TOTAL] 创建快捷启动命令"
 mkdir -p "$PREFIX/bin"
 cat > "$PREFIX/bin/codex-start" <<'START_EOF'
 #!/data/data/com.termux/files/usr/bin/bash
@@ -368,17 +382,18 @@ fi
 codex "$@"
 START_EOF
 chmod +x "$PREFIX/bin/codex-start"
-echo "      完成"
-
+echo "      ✓ 完成"
 echo
+
 echo "=========================================="
-echo "              安装完成"
+echo "     全部 $TOTAL 步都完成了 ✓"
 echo "=========================================="
 echo
 echo "还差一步：设置你的 DeepSeek 密钥"
 echo
-echo "  执行这一行（把 sk-xxx 换成你自己的新密钥）："
+echo "  执行这两行（把 sk-xxx 换成你自己的新密钥）："
 echo
+echo "    sed -i '/OPENAI_API_KEY/d' ~/.bashrc"
 echo "    echo 'export OPENAI_API_KEY=sk-你的密钥' >> ~/.bashrc"
 echo "    source ~/.bashrc"
 echo
